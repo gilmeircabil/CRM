@@ -61,6 +61,12 @@ npm run dev
 
 ---
 
+## ☁️ Cloud Deployment (Vercel & Render)
+
+For step-by-step instructions on deploying the React frontend to **Vercel**, the Express API to **Render**, and the database to **MongoDB Atlas**, see the [Production Deployment Guide](DEPLOYMENT.md).
+
+---
+
 ## 🔑 Demo Credentials
 
 | Role | Email | Password | Permissions |

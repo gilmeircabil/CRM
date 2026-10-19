@@ -1,3 +1,12 @@
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+function resolveUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `${API_BASE_URL}${url}`;
+}
+
 export async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
@@ -10,7 +19,7 @@ export async function apiRequest<T>(
     defaultHeaders['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(url, {
+  const response = await fetch(resolveUrl(url), {
     ...options,
     headers: {
       ...defaultHeaders,
@@ -45,7 +54,7 @@ export async function apiRequest<T>(
 }
 
 export async function downloadFile(url: string, filename: string): Promise<void> {
-  const response = await fetch(url, {
+  const response = await fetch(resolveUrl(url), {
     credentials: 'include',
   });
 

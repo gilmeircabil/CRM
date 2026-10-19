@@ -36,6 +36,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const isProd = process.env.NODE_ENV === 'production';
 
+// Trust first proxy (Render / Cloudflare / reverse proxy) so secure cookies & rate limiters work
+app.set('trust proxy', 1);
+
 async function startServer() {
   const mongoUri = await connectDB();
 
@@ -76,10 +79,27 @@ async function startServer() {
     })
   );
 
-  // 2. CORS configuration
+  // 2. CORS configuration supporting Vercel and local origins
+  const clientUrls = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(',').map((url) => url.trim().replace(/\/$/, ''))
+    : [];
+
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    ...clientUrls,
+  ];
+
   app.use(
     cors({
-      origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+      origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. mobile apps, curl, or same-origin reverse proxies)
+        if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          return callback(null, true);
+        }
+        return callback(null, false);
+      },
       credentials: true,
     })
   );
@@ -98,6 +118,8 @@ async function startServer() {
   app.use('/api/import', importLimiter);
 
   // 6. Session Management with connect-mongo
+  const cookieSameSite = (process.env.COOKIE_SAME_SITE as 'lax' | 'none' | 'strict') || 'lax';
+
   app.use(
     session({
       name: 'clientflow.sid',
@@ -111,7 +133,7 @@ async function startServer() {
       }),
       cookie: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: cookieSameSite,
         secure: isProd,
         maxAge: 24 * 60 * 60 * 1000,
       },
