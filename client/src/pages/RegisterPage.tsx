@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../api/client';
+import { FormField, getInputClassName } from '../components/FormField';
 
 export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -29,6 +30,13 @@ export const RegisterPage: React.FC = () => {
   const [isInitialSetup, setIsInitialSetup] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+    adminKey?: string;
+  }>({});
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { registerAdmin } = useAuth();
@@ -78,21 +86,38 @@ export const RegisterPage: React.FC = () => {
       return;
     }
 
-    if (!isPasswordValid) {
-      setError('Please satisfy all password complexity requirements.');
-      return;
+    const errors: typeof fieldErrors = {};
+    if (!name.trim()) {
+      errors.name = 'Full name is required';
+    }
+    if (!email.trim()) {
+      errors.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errors.email = 'Please enter a valid email address';
     }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
+    if (!password) {
+      errors.password = 'Password is required';
+    } else if (!isPasswordValid) {
+      errors.password = 'Must meet complexity rules';
+    }
+
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Confirmation required';
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
     }
 
     if (requiresKey && !adminKey.trim()) {
-      setError('Admin Registration Key is required by server configuration.');
+      errors.adminKey = 'Admin registration key required';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -100,6 +125,15 @@ export const RegisterPage: React.FC = () => {
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please check your credentials.');
+      if (err.details && Array.isArray(err.details)) {
+        const serverErrors: typeof fieldErrors = {};
+        err.details.forEach((d: { field: string; message: string }) => {
+          if (d.field in fieldErrors || ['name', 'email', 'password', 'adminKey'].includes(d.field)) {
+            (serverErrors as any)[d.field] = d.message;
+          }
+        });
+        setFieldErrors(serverErrors);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -157,7 +191,7 @@ export const RegisterPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Anti-bot honeypot field (hidden from real users) */}
             <div style={{ display: 'none' }} aria-hidden="true">
               <input
@@ -170,40 +204,40 @@ export const RegisterPage: React.FC = () => {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="register-name"
-                className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1"
-              >
-                Full Name
-              </label>
+            <FormField
+              label="Full Name"
+              error={fieldErrors.name}
+              required
+              htmlFor="register-name"
+            >
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.name ? 'text-rose-400' : 'text-slate-400'}`}>
                   <User className="w-4 h-4" />
                 </div>
                 <input
                   id="register-name"
                   name="name"
                   type="text"
-                  required
                   disabled={!isRegistrationOpen}
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                   placeholder="e.g. Jane Doe"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                  className={getInputClassName(fieldErrors.name, { hasIcon: true, extraClasses: 'text-sm py-2 disabled:bg-slate-50 disabled:text-slate-400' })}
                 />
               </div>
-            </div>
+            </FormField>
 
-            <div>
-              <label
-                htmlFor="register-email"
-                className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1"
-              >
-                Admin Email Address
-              </label>
+            <FormField
+              label="Admin Email Address"
+              error={fieldErrors.email}
+              required
+              htmlFor="register-email"
+            >
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.email ? 'text-rose-400' : 'text-slate-400'}`}>
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
@@ -211,25 +245,26 @@ export const RegisterPage: React.FC = () => {
                   name="email"
                   type="email"
                   autoComplete="email"
-                  required
                   disabled={!isRegistrationOpen}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                  }}
                   placeholder="admin@yourcompany.com"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                  className={getInputClassName(fieldErrors.email, { hasIcon: true, extraClasses: 'text-sm py-2 disabled:bg-slate-50 disabled:text-slate-400' })}
                 />
               </div>
-            </div>
+            </FormField>
 
-            <div>
-              <label
-                htmlFor="register-password"
-                className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1"
-              >
-                Password
-              </label>
+            <FormField
+              label="Password"
+              error={fieldErrors.password}
+              required
+              htmlFor="register-password"
+            >
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.password ? 'text-rose-400' : 'text-slate-400'}`}>
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -237,12 +272,14 @@ export const RegisterPage: React.FC = () => {
                   name="password"
                   type="password"
                   autoComplete="new-password"
-                  required
                   disabled={!isRegistrationOpen}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                  className={getInputClassName(fieldErrors.password, { hasIcon: true, extraClasses: 'text-sm py-2 disabled:bg-slate-50 disabled:text-slate-400' })}
                 />
               </div>
 
@@ -274,17 +311,16 @@ export const RegisterPage: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </FormField>
 
-            <div>
-              <label
-                htmlFor="register-confirm-password"
-                className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1"
-              >
-                Confirm Password
-              </label>
+            <FormField
+              label="Confirm Password"
+              error={fieldErrors.confirmPassword}
+              required
+              htmlFor="register-confirm-password"
+            >
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.confirmPassword ? 'text-rose-400' : 'text-slate-400'}`}>
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -292,41 +328,44 @@ export const RegisterPage: React.FC = () => {
                   name="confirmPassword"
                   type="password"
                   autoComplete="new-password"
-                  required
                   disabled={!isRegistrationOpen}
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (fieldErrors.confirmPassword) setFieldErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                  }}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                  className={getInputClassName(fieldErrors.confirmPassword, { hasIcon: true, extraClasses: 'text-sm py-2 disabled:bg-slate-50 disabled:text-slate-400' })}
                 />
               </div>
-            </div>
+            </FormField>
 
             {requiresKey && (
-              <div>
-                <label
-                  htmlFor="register-admin-key"
-                  className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1"
-                >
-                  Admin Registration Key <span className="text-indigo-600 font-bold">*</span>
-                </label>
+              <FormField
+                label="Admin Registration Key"
+                error={fieldErrors.adminKey}
+                required
+                htmlFor="register-admin-key"
+              >
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.adminKey ? 'text-rose-400' : 'text-slate-400'}`}>
                     <Key className="w-4 h-4" />
                   </div>
                   <input
                     id="register-admin-key"
                     name="adminKey"
                     type="password"
-                    required={requiresKey}
                     disabled={!isRegistrationOpen}
                     value={adminKey}
-                    onChange={(e) => setAdminKey(e.target.value)}
+                    onChange={(e) => {
+                      setAdminKey(e.target.value);
+                      if (fieldErrors.adminKey) setFieldErrors((prev) => ({ ...prev, adminKey: undefined }));
+                    }}
                     placeholder="Enter environment registration key"
-                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                    className={getInputClassName(fieldErrors.adminKey, { hasIcon: true, extraClasses: 'text-sm py-2 disabled:bg-slate-50 disabled:text-slate-400' })}
                   />
                 </div>
-              </div>
+              </FormField>
             )}
 
             <div className="pt-2">

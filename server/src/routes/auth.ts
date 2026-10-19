@@ -218,6 +218,7 @@ router.post('/logout', (req: Request, res: Response): void => {
       res.status(500).json({ error: 'Could not log out' });
       return;
     }
+    res.clearCookie('clientflow.sid');
     res.clearCookie('connect.sid');
     res.json({ message: 'Logged out successfully' });
   });

@@ -1,3 +1,15 @@
+export class ApiError extends Error {
+  status: number;
+  details?: Array<{ field: string; message: string }>;
+
+  constructor(message: string, status: number, details?: Array<{ field: string; message: string }>) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.details = details;
+  }
+}
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 function resolveUrl(url: string): string {
@@ -30,19 +42,21 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     let errorMessage = `HTTP error! status: ${response.status}`;
+    let details: Array<{ field: string; message: string }> | undefined;
     try {
       const errorData = await response.json();
       if (errorData.error) {
         errorMessage = errorData.error;
       }
       if (errorData.details) {
+        details = errorData.details;
         const detailsStr = errorData.details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
         errorMessage += ` (${detailsStr})`;
       }
     } catch {
       // Non-JSON response
     }
-    throw new Error(errorMessage);
+    throw new ApiError(errorMessage, response.status, details);
   }
 
   // If response is 204 No Content or empty

@@ -24,6 +24,7 @@ import { StatusBadge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EmptyState } from '../components/EmptyState';
+import { FormField, getInputClassName } from '../components/FormField';
 import { useAuth } from '../context/AuthContext';
 
 export const CustomersPage: React.FC = () => {
@@ -51,7 +52,25 @@ export const CustomersPage: React.FC = () => {
     address: '',
     status: 'active' as CustomerStatus,
   });
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    email?: string;
+    company?: string;
+    jobTitle?: string;
+    phone?: string;
+  }>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleMutationError = (err: any) => {
+    setFormError(err.message || 'An error occurred');
+    if (err.details && Array.isArray(err.details)) {
+      const errMap: typeof fieldErrors = {};
+      err.details.forEach((d: { field: string; message: string }) => {
+        (errMap as any)[d.field] = d.message;
+      });
+      setFieldErrors(errMap);
+    }
+  };
 
   // Import State
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -92,7 +111,7 @@ export const CustomersPage: React.FC = () => {
       setIsCreateModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   // Edit Customer Mutation
@@ -107,7 +126,7 @@ export const CustomersPage: React.FC = () => {
       setIsEditModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   // Archive Mutation (Soft Delete)
@@ -154,6 +173,7 @@ export const CustomersPage: React.FC = () => {
       status: 'active',
     });
     setFormError(null);
+    setFieldErrors({});
     setSelectedCustomer(null);
   };
 
@@ -447,103 +467,156 @@ export const CustomersPage: React.FC = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const errors: typeof fieldErrors = {};
+            if (!formData.name.trim()) errors.name = 'Full name is required';
+            if (!formData.email.trim()) {
+              errors.email = 'Email address is required';
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+              errors.email = 'Valid email is required';
+            }
+            if (!formData.company.trim()) errors.company = 'Company is required';
+            if (!formData.jobTitle.trim()) errors.jobTitle = 'Job title is required';
+            if (!formData.phone.trim()) errors.phone = 'Phone number is required';
+
+            if (Object.keys(errors).length > 0) {
+              setFieldErrors(errors);
+              return;
+            }
+
+            setFieldErrors({});
             if (isCreateModalOpen) {
               createMutation.mutate(formData);
             } else if (selectedCustomer) {
               editMutation.mutate({ id: selectedCustomer._id, updates: formData });
             }
           }}
+          noValidate
           className="space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+            <FormField
+              label="Full Name"
+              error={fieldErrors.name}
+              required
+              htmlFor="customer-name"
+            >
               <input
+                id="customer-name"
                 type="text"
-                required
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                onChange={(e) => {
+                  setFormData({ ...formData, name: e.target.value });
+                  if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.name)}
                 placeholder="Jane Doe"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
+            <FormField
+              label="Email Address"
+              error={fieldErrors.email}
+              required
+              htmlFor="customer-email"
+            >
               <input
+                id="customer-email"
                 type="email"
-                required
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.email)}
                 placeholder="jane@company.com"
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name *</label>
+            <FormField
+              label="Company Name"
+              error={fieldErrors.company}
+              required
+              htmlFor="customer-company"
+            >
               <input
+                id="customer-company"
                 type="text"
-                required
                 value={formData.company}
-                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                onChange={(e) => {
+                  setFormData({ ...formData, company: e.target.value });
+                  if (fieldErrors.company) setFieldErrors((prev) => ({ ...prev, company: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.company)}
                 placeholder="Acme Corp"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Job Title *</label>
+            <FormField
+              label="Job Title"
+              error={fieldErrors.jobTitle}
+              required
+              htmlFor="customer-job-title"
+            >
               <input
+                id="customer-job-title"
                 type="text"
-                required
                 value={formData.jobTitle}
-                onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                onChange={(e) => {
+                  setFormData({ ...formData, jobTitle: e.target.value });
+                  if (fieldErrors.jobTitle) setFieldErrors((prev) => ({ ...prev, jobTitle: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.jobTitle)}
                 placeholder="Director of Sales"
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number *</label>
+            <FormField
+              label="Phone Number"
+              error={fieldErrors.phone}
+              required
+              htmlFor="customer-phone"
+            >
               <input
+                id="customer-phone"
                 type="text"
-                required
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                onChange={(e) => {
+                  setFormData({ ...formData, phone: e.target.value });
+                  if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.phone)}
                 placeholder="+1 (555) 000-0000"
               />
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+            <FormField label="Status" htmlFor="customer-status">
               <select
+                id="customer-status"
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as CustomerStatus })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="archived">Archived</option>
               </select>
-            </div>
+            </FormField>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Office Address</label>
+          <FormField label="Office Address" htmlFor="customer-address">
             <input
+              id="customer-address"
               type="text"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
               placeholder="123 Corporate Blvd, Suite 400"
             />
-          </div>
+          </FormField>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end space-x-2">
             <button

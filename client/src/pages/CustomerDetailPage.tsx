@@ -24,6 +24,7 @@ import { Customer, Deal, Task, Activity, DealStage, TaskPriority } from '../type
 import { StageBadge, StatusBadge, PriorityBadge } from '../components/Badge';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Modal } from '../components/Modal';
+import { FormField, getInputClassName } from '../components/FormField';
 
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,12 @@ export const CustomerDetailPage: React.FC = () => {
     stage: 'New Lead' as DealStage,
     expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   });
+  const [dealErrors, setDealErrors] = useState<{
+    title?: string;
+    value?: string;
+    expectedCloseDate?: string;
+  }>({});
+  const [dealFormError, setDealFormError] = useState<string | null>(null);
 
   // New Task Form State
   const [taskForm, setTaskForm] = useState({
@@ -48,11 +55,17 @@ export const CustomerDetailPage: React.FC = () => {
     priority: 'medium' as TaskPriority,
     dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   });
+  const [taskErrors, setTaskErrors] = useState<{
+    description?: string;
+    dueDate?: string;
+  }>({});
+  const [taskFormError, setTaskFormError] = useState<string | null>(null);
 
   // Activity Composer State
   const [activityType, setActivityType] = useState<'note' | 'call' | 'meeting'>('note');
   const [activityContent, setActivityContent] = useState('');
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityFieldError, setActivityFieldError] = useState<string | null>(null);
 
   // Fetch customer details, deals, tasks, and activities
   const { data, isLoading, error } = useQuery<{
@@ -81,8 +94,15 @@ export const CustomerDetailPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['customer', id] });
       setActivityContent('');
       setActivityError(null);
+      setActivityFieldError(null);
     },
-    onError: (err: any) => setActivityError(err.message),
+    onError: (err: any) => {
+      setActivityError(err.message || 'Failed to save activity');
+      if (err.details && Array.isArray(err.details)) {
+        const d = err.details.find((x: any) => x.field === 'content');
+        if (d) setActivityFieldError(d.message);
+      }
+    },
   });
 
   // Create Deal Mutation
@@ -108,6 +128,18 @@ export const CustomerDetailPage: React.FC = () => {
         stage: 'New Lead',
         expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       });
+      setDealErrors({});
+      setDealFormError(null);
+    },
+    onError: (err: any) => {
+      setDealFormError(err.message || 'Failed to create deal');
+      if (err.details && Array.isArray(err.details)) {
+        const errMap: typeof dealErrors = {};
+        err.details.forEach((d: { field: string; message: string }) => {
+          (errMap as any)[d.field] = d.message;
+        });
+        setDealErrors(errMap);
+      }
     },
   });
 
@@ -131,6 +163,18 @@ export const CustomerDetailPage: React.FC = () => {
         priority: 'medium',
         dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       });
+      setTaskErrors({});
+      setTaskFormError(null);
+    },
+    onError: (err: any) => {
+      setTaskFormError(err.message || 'Failed to create task');
+      if (err.details && Array.isArray(err.details)) {
+        const errMap: typeof taskErrors = {};
+        err.details.forEach((d: { field: string; message: string }) => {
+          (errMap as any)[d.field] = d.message;
+        });
+        setTaskErrors(errMap);
+      }
     },
   });
 
@@ -365,23 +409,35 @@ export const CustomerDetailPage: React.FC = () => {
 
             {/* Activity textarea */}
             <div className="space-y-3">
-              <textarea
-                rows={3}
-                value={activityContent}
-                onChange={(e) => setActivityContent(e.target.value)}
-                placeholder={
-                  activityType === 'note'
-                    ? 'Write internal notes...'
-                    : activityType === 'call'
-                    ? 'Log phone call outcomes...'
-                    : 'Record meeting minutes and key takeaways...'
-                }
-                className="w-full p-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
-              />
+              <FormField label="Activity Details" error={activityFieldError}>
+                <textarea
+                  rows={3}
+                  value={activityContent}
+                  onChange={(e) => {
+                    setActivityContent(e.target.value);
+                    if (activityFieldError) setActivityFieldError(null);
+                  }}
+                  placeholder={
+                    activityType === 'note'
+                      ? 'Write internal notes...'
+                      : activityType === 'call'
+                      ? 'Log phone call outcomes...'
+                      : 'Record meeting minutes and key takeaways...'
+                  }
+                  className={getInputClassName(activityFieldError)}
+                />
+              </FormField>
               <button
                 type="button"
-                disabled={!activityContent.trim() || createActivityMutation.isPending}
-                onClick={() => createActivityMutation.mutate()}
+                disabled={createActivityMutation.isPending}
+                onClick={() => {
+                  if (!activityContent.trim()) {
+                    setActivityFieldError('Please enter activity notes or details');
+                    return;
+                  }
+                  setActivityFieldError(null);
+                  createActivityMutation.mutate();
+                }}
                 className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-2xs disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
@@ -427,40 +483,67 @@ export const CustomerDetailPage: React.FC = () => {
       {/* Add Deal Modal */}
       <Modal
         isOpen={isDealModalOpen}
-        onClose={() => setIsDealModalOpen(false)}
+        onClose={() => {
+          setIsDealModalOpen(false);
+          setDealErrors({});
+          setDealFormError(null);
+        }}
         title="Add Deal for Customer"
       >
+        {dealFormError && (
+          <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{dealFormError}</span>
+          </div>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const errors: typeof dealErrors = {};
+            if (!dealForm.title.trim()) errors.title = 'Deal title is required';
+            if (dealForm.value === undefined || dealForm.value === null || isNaN(dealForm.value) || Number(dealForm.value) < 0) {
+              errors.value = 'Valid positive deal value is required';
+            }
+            if (!dealForm.expectedCloseDate) errors.expectedCloseDate = 'Target close date is required';
+
+            if (Object.keys(errors).length > 0) {
+              setDealErrors(errors);
+              return;
+            }
+            setDealErrors({});
+            setDealFormError(null);
             createDealMutation.mutate();
           }}
+          noValidate
           className="space-y-4"
         >
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Deal Title *</label>
+          <FormField label="Deal Title" error={dealErrors.title} required>
             <input
               type="text"
-              required
               value={dealForm.title}
-              onChange={(e) => setDealForm({ ...dealForm, title: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setDealForm({ ...dealForm, title: e.target.value });
+                if (dealErrors.title) setDealErrors({ ...dealErrors, title: undefined });
+              }}
+              className={getInputClassName(dealErrors.title)}
               placeholder="e.g. Q4 Cloud Subscription"
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Value ($) *</label>
+            <FormField label="Value ($)" error={dealErrors.value} required>
               <input
                 type="number"
                 min="0"
-                required
                 value={dealForm.value}
-                onChange={(e) => setDealForm({ ...dealForm, value: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                onChange={(e) => {
+                  setDealForm({ ...dealForm, value: parseFloat(e.target.value) || 0 });
+                  if (dealErrors.value) setDealErrors({ ...dealErrors, value: undefined });
+                }}
+                className={getInputClassName(dealErrors.value)}
               />
-            </div>
+            </FormField>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Lead Source</label>
               <select
@@ -494,22 +577,27 @@ export const CustomerDetailPage: React.FC = () => {
                 <option value="Lost">Lost</option>
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Target Close Date</label>
+            <FormField label="Target Close Date" error={dealErrors.expectedCloseDate} required>
               <input
                 type="date"
-                required
                 value={dealForm.expectedCloseDate}
-                onChange={(e) => setDealForm({ ...dealForm, expectedCloseDate: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                onChange={(e) => {
+                  setDealForm({ ...dealForm, expectedCloseDate: e.target.value });
+                  if (dealErrors.expectedCloseDate) setDealErrors({ ...dealErrors, expectedCloseDate: undefined });
+                }}
+                className={getInputClassName(dealErrors.expectedCloseDate)}
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end space-x-2">
             <button
               type="button"
-              onClick={() => setIsDealModalOpen(false)}
+              onClick={() => {
+                setIsDealModalOpen(false);
+                setDealErrors({});
+                setDealFormError(null);
+              }}
               className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium"
             >
               Cancel
@@ -528,27 +616,50 @@ export const CustomerDetailPage: React.FC = () => {
       {/* Add Task Modal */}
       <Modal
         isOpen={isTaskModalOpen}
-        onClose={() => setIsTaskModalOpen(false)}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setTaskErrors({});
+          setTaskFormError(null);
+        }}
         title="Add Follow-up Task"
       >
+        {taskFormError && (
+          <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{taskFormError}</span>
+          </div>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const errors: typeof taskErrors = {};
+            if (!taskForm.description.trim()) errors.description = 'Task description is required';
+            if (!taskForm.dueDate) errors.dueDate = 'Due date is required';
+
+            if (Object.keys(errors).length > 0) {
+              setTaskErrors(errors);
+              return;
+            }
+            setTaskErrors({});
+            setTaskFormError(null);
             createTaskMutation.mutate();
           }}
+          noValidate
           className="space-y-4"
         >
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Task Description *</label>
+          <FormField label="Task Description" error={taskErrors.description} required>
             <input
               type="text"
-              required
               value={taskForm.description}
-              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setTaskForm({ ...taskForm, description: e.target.value });
+                if (taskErrors.description) setTaskErrors({ ...taskErrors, description: undefined });
+              }}
+              className={getInputClassName(taskErrors.description)}
               placeholder="e.g. Follow up on contract redlines"
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -563,22 +674,27 @@ export const CustomerDetailPage: React.FC = () => {
                 <option value="high">High</option>
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Due Date</label>
+            <FormField label="Due Date" error={taskErrors.dueDate} required>
               <input
                 type="date"
-                required
                 value={taskForm.dueDate}
-                onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                onChange={(e) => {
+                  setTaskForm({ ...taskForm, dueDate: e.target.value });
+                  if (taskErrors.dueDate) setTaskErrors({ ...taskErrors, dueDate: undefined });
+                }}
+                className={getInputClassName(taskErrors.dueDate)}
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end space-x-2">
             <button
               type="button"
-              onClick={() => setIsTaskModalOpen(false)}
+              onClick={() => {
+                setIsTaskModalOpen(false);
+                setTaskErrors({});
+                setTaskFormError(null);
+              }}
               className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium"
             >
               Cancel

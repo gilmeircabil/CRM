@@ -18,6 +18,7 @@ import { User as UserType, UserRole } from '../types';
 import { RoleBadge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { FormField, getInputClassName } from '../components/FormField';
 import { useAuth } from '../context/AuthContext';
 
 export const TeamPage: React.FC = () => {
@@ -40,7 +41,23 @@ export const TeamPage: React.FC = () => {
     role: 'staff' as UserRole,
     isActive: true,
   });
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    email?: string;
+    password?: string;
+  }>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleMutationError = (err: any) => {
+    setFormError(err.message || 'An error occurred');
+    if (err.details && Array.isArray(err.details)) {
+      const errMap: typeof fieldErrors = {};
+      err.details.forEach((d: { field: string; message: string }) => {
+        (errMap as any)[d.field] = d.message;
+      });
+      setFieldErrors(errMap);
+    }
+  };
 
   // Fetch all users (Admin endpoint)
   const { data, isLoading, error } = useQuery<{ users: UserType[] }>({
@@ -60,7 +77,7 @@ export const TeamPage: React.FC = () => {
       setIsCreateModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   // Edit User Mutation
@@ -75,7 +92,7 @@ export const TeamPage: React.FC = () => {
       setIsEditModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   // Delete User Mutation
@@ -110,6 +127,7 @@ export const TeamPage: React.FC = () => {
       isActive: true,
     });
     setFormError(null);
+    setFieldErrors({});
     setSelectedUser(null);
   };
 
@@ -277,6 +295,19 @@ export const TeamPage: React.FC = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const errors: typeof fieldErrors = {};
+            if (!formData.name.trim()) errors.name = 'Full name is required';
+            if (!formData.email.trim()) errors.email = 'Email address is required';
+            if (isCreateModalOpen && !formData.password.trim()) errors.password = 'Password is required';
+            else if (formData.password.trim() && formData.password.trim().length < 6) errors.password = 'Password must be at least 6 characters';
+
+            if (Object.keys(errors).length > 0) {
+              setFieldErrors(errors);
+              return;
+            }
+            setFieldErrors({});
+            setFormError(null);
+
             if (isCreateModalOpen) {
               createMutation.mutate(formData);
             } else if (selectedUser) {
@@ -292,46 +323,52 @@ export const TeamPage: React.FC = () => {
               editMutation.mutate({ id: selectedUser._id || selectedUser.id, updates });
             }
           }}
+          noValidate
           className="space-y-4"
         >
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+          <FormField label="Full Name" error={fieldErrors.name} required>
             <input
               type="text"
-              required
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
+              }}
+              className={getInputClassName(fieldErrors.name)}
               placeholder="e.g. Alex Morgan"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
+          <FormField label="Email Address" error={fieldErrors.email} required>
             <input
               type="email"
-              required
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setFormData({ ...formData, email: e.target.value });
+                if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: undefined });
+              }}
+              className={getInputClassName(fieldErrors.email)}
               placeholder="alex@clientflow.com"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              {isCreateModalOpen ? 'Password *' : 'Change Password (leave blank to keep current)'}
-            </label>
+          <FormField
+            label={isCreateModalOpen ? 'Password' : 'Change Password (leave blank to keep current)'}
+            error={fieldErrors.password}
+            required={isCreateModalOpen}
+          >
             <input
               type="password"
-              required={isCreateModalOpen}
               minLength={6}
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setFormData({ ...formData, password: e.target.value });
+                if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: undefined });
+              }}
+              className={getInputClassName(fieldErrors.password)}
               placeholder="••••••••"
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
             <div>

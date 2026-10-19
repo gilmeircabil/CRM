@@ -18,6 +18,7 @@ import { PriorityBadge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EmptyState } from '../components/EmptyState';
+import { FormField, getInputClassName } from '../components/FormField';
 import { useAuth } from '../context/AuthContext';
 
 export const TasksPage: React.FC = () => {
@@ -41,7 +42,22 @@ export const TasksPage: React.FC = () => {
     customerId: '',
     dealId: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<{
+    description?: string;
+    dueDate?: string;
+  }>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleMutationError = (err: any) => {
+    setFormError(err.message || 'An error occurred');
+    if (err.details && Array.isArray(err.details)) {
+      const errMap: typeof fieldErrors = {};
+      err.details.forEach((d: { field: string; message: string }) => {
+        (errMap as any)[d.field] = d.message;
+      });
+      setFieldErrors(errMap);
+    }
+  };
 
   // Fetch Tasks Query
   const { data: tasksData, isLoading } = useQuery<{ tasks: Task[] }>({
@@ -96,7 +112,7 @@ export const TasksPage: React.FC = () => {
       setIsCreateModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   // Edit Task Mutation
@@ -117,7 +133,7 @@ export const TasksPage: React.FC = () => {
       setIsEditModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   const resetForm = () => {
@@ -130,6 +146,7 @@ export const TasksPage: React.FC = () => {
       dealId: '',
     });
     setFormError(null);
+    setFieldErrors({});
     setSelectedTask(null);
   };
 
@@ -328,50 +345,75 @@ export const TasksPage: React.FC = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const errors: typeof fieldErrors = {};
+            if (!formData.description.trim()) errors.description = 'Task description is required';
+            if (!formData.dueDate) errors.dueDate = 'Due date is required';
+
+            if (Object.keys(errors).length > 0) {
+              setFieldErrors(errors);
+              return;
+            }
+
+            setFieldErrors({});
             if (isCreateModalOpen) {
               createMutation.mutate(formData);
             } else if (selectedTask) {
               editMutation.mutate({ id: selectedTask._id, updates: formData });
             }
           }}
+          noValidate
           className="space-y-4"
         >
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Task Description *</label>
+          <FormField
+            label="Task Description"
+            error={fieldErrors.description}
+            required
+            htmlFor="task-description"
+          >
             <input
+              id="task-description"
               type="text"
-              required
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setFormData({ ...formData, description: e.target.value });
+                if (fieldErrors.description) setFieldErrors((prev) => ({ ...prev, description: undefined }));
+              }}
+              className={getInputClassName(fieldErrors.description)}
               placeholder="e.g. Follow up on contract signature"
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Priority</label>
+            <FormField label="Priority" htmlFor="task-priority">
               <select
+                id="task-priority"
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value as TaskPriority })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Due Date *</label>
+            <FormField
+              label="Due Date"
+              error={fieldErrors.dueDate}
+              required
+              htmlFor="task-due-date"
+            >
               <input
+                id="task-due-date"
                 type="date"
-                required
                 value={formData.dueDate}
-                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                onChange={(e) => {
+                  setFormData({ ...formData, dueDate: e.target.value });
+                  if (fieldErrors.dueDate) setFieldErrors((prev) => ({ ...prev, dueDate: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.dueDate)}
               />
-            </div>
+            </FormField>
           </div>
 
           {/* Assigned To (for Admin, or select from team) */}

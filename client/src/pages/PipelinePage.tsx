@@ -18,6 +18,7 @@ import { Deal, DealStage, Customer } from '../types';
 import { StageBadge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { FormField, getInputClassName } from '../components/FormField';
 
 const STAGES: DealStage[] = [
   'New Lead',
@@ -51,7 +52,24 @@ export const PipelinePage: React.FC = () => {
     stage: 'New Lead' as DealStage,
     expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   });
+  const [fieldErrors, setFieldErrors] = useState<{
+    title?: string;
+    customerId?: string;
+    value?: string;
+    expectedCloseDate?: string;
+  }>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleMutationError = (err: any) => {
+    setFormError(err.message || 'An error occurred');
+    if (err.details && Array.isArray(err.details)) {
+      const errMap: typeof fieldErrors = {};
+      err.details.forEach((d: { field: string; message: string }) => {
+        (errMap as any)[d.field] = d.message;
+      });
+      setFieldErrors(errMap);
+    }
+  };
 
   // Fetch all deals
   const { data: dealsData, isLoading: isDealsLoading } = useQuery<{ deals: Deal[] }>({
@@ -94,7 +112,7 @@ export const PipelinePage: React.FC = () => {
       setIsCreateModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   // Edit Deal Mutation
@@ -113,7 +131,7 @@ export const PipelinePage: React.FC = () => {
       setIsEditModalOpen(false);
       resetForm();
     },
-    onError: (err: any) => setFormError(err.message),
+    onError: handleMutationError,
   });
 
   const resetForm = () => {
@@ -126,6 +144,7 @@ export const PipelinePage: React.FC = () => {
       expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     });
     setFormError(null);
+    setFieldErrors({});
     setSelectedDeal(null);
   };
 
@@ -420,33 +439,62 @@ export const PipelinePage: React.FC = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const errors: typeof fieldErrors = {};
+            if (!formData.title.trim()) errors.title = 'Deal title is required';
+            if (!formData.customerId) errors.customerId = 'Customer is required';
+            if (formData.value === undefined || formData.value === null || isNaN(formData.value) || formData.value < 0) {
+              errors.value = 'Valid deal value is required';
+            }
+            if (!formData.expectedCloseDate) errors.expectedCloseDate = 'Target close date is required';
+
+            if (Object.keys(errors).length > 0) {
+              setFieldErrors(errors);
+              return;
+            }
+
+            setFieldErrors({});
             if (isCreateModalOpen) {
               createMutation.mutate(formData);
             } else if (selectedDeal) {
               editMutation.mutate({ id: selectedDeal._id, updates: formData });
             }
           }}
+          noValidate
           className="space-y-4"
         >
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Deal Title *</label>
+          <FormField
+            label="Deal Title"
+            error={fieldErrors.title}
+            required
+            htmlFor="deal-title"
+          >
             <input
+              id="deal-title"
               type="text"
-              required
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setFormData({ ...formData, title: e.target.value });
+                if (fieldErrors.title) setFieldErrors((prev) => ({ ...prev, title: undefined }));
+              }}
+              className={getInputClassName(fieldErrors.title)}
               placeholder="e.g. Enterprise License Expansion"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Customer *</label>
+          <FormField
+            label="Customer"
+            error={fieldErrors.customerId}
+            required
+            htmlFor="deal-customer"
+          >
             <select
-              required
+              id="deal-customer"
               value={formData.customerId}
-              onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+              onChange={(e) => {
+                setFormData({ ...formData, customerId: e.target.value });
+                if (fieldErrors.customerId) setFieldErrors((prev) => ({ ...prev, customerId: undefined }));
+              }}
+              className={getInputClassName(fieldErrors.customerId, { extraClasses: 'bg-white' })}
             >
               <option value="">Select a Customer</option>
               {customersData?.customers.map((c) => (
@@ -455,26 +503,34 @@ export const PipelinePage: React.FC = () => {
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Deal Value ($) *</label>
+            <FormField
+              label="Deal Value ($)"
+              error={fieldErrors.value}
+              required
+              htmlFor="deal-value"
+            >
               <input
+                id="deal-value"
                 type="number"
                 min="0"
-                required
                 value={formData.value}
-                onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                onChange={(e) => {
+                  setFormData({ ...formData, value: parseFloat(e.target.value) || 0 });
+                  if (fieldErrors.value) setFieldErrors((prev) => ({ ...prev, value: undefined }));
+                }}
+                className={getInputClassName(fieldErrors.value)}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Lead Source</label>
+            </FormField>
+
+            <FormField label="Lead Source" htmlFor="deal-source">
               <select
+                id="deal-source"
                 value={formData.leadSource}
                 onChange={(e) => setFormData({ ...formData, leadSource: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
               >
                 <option value="Website">Website</option>
                 <option value="Referral">Referral</option>
@@ -483,16 +539,16 @@ export const PipelinePage: React.FC = () => {
                 <option value="Partner">Partner</option>
                 <option value="Other">Other</option>
               </select>
-            </div>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Pipeline Stage</label>
+            <FormField label="Pipeline Stage" htmlFor="deal-stage">
               <select
+                id="deal-stage"
                 value={formData.stage}
                 onChange={(e) => setFormData({ ...formData, stage: e.target.value as DealStage })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
               >
                 {STAGES.map((s) => (
                   <option key={s} value={s}>
@@ -500,18 +556,27 @@ export const PipelinePage: React.FC = () => {
                   </option>
                 ))}
               </select>
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Target Close Date</label>
+            <FormField
+              label="Target Close Date"
+              error={fieldErrors.expectedCloseDate}
+              required
+              htmlFor="deal-close-date"
+            >
               <input
+                id="deal-close-date"
                 type="date"
-                required
                 value={formData.expectedCloseDate}
-                onChange={(e) => setFormData({ ...formData, expectedCloseDate: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                onChange={(e) => {
+                  setFormData({ ...formData, expectedCloseDate: e.target.value });
+                  if (fieldErrors.expectedCloseDate) {
+                    setFieldErrors((prev) => ({ ...prev, expectedCloseDate: undefined }));
+                  }
+                }}
+                className={getInputClassName(fieldErrors.expectedCloseDate)}
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end space-x-2">

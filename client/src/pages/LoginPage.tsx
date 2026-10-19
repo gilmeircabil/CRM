@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Building2, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { FormField, getInputClassName } from '../components/FormField';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
@@ -14,13 +16,36 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const errors: { email?: string; password?: string } = {};
+    if (!email.trim()) {
+      errors.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!password) {
+      errors.password = 'Password is required';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      const msg = err.message || 'Login failed';
+      setError(msg);
+      setFieldErrors({
+        email: 'Invalid credentials',
+        password: 'Check your password',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -49,13 +74,15 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="login-email" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Email Address
-              </label>
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <FormField
+              label="Email Address"
+              error={fieldErrors.email}
+              required
+              htmlFor="login-email"
+            >
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.email ? 'text-rose-400' : 'text-slate-400'}`}>
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
@@ -63,21 +90,27 @@ export const LoginPage: React.FC = () => {
                   name="email"
                   type="email"
                   autoComplete="email"
-                  required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) {
+                      setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                    }
+                  }}
                   placeholder="name@company.com"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors"
+                  className={getInputClassName(fieldErrors.email, { hasIcon: true, extraClasses: 'text-sm py-2' })}
                 />
               </div>
-            </div>
+            </FormField>
 
-            <div>
-              <label htmlFor="login-password" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Password
-              </label>
+            <FormField
+              label="Password"
+              error={fieldErrors.password}
+              required
+              htmlFor="login-password"
+            >
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${fieldErrors.password ? 'text-rose-400' : 'text-slate-400'}`}>
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -85,14 +118,18 @@ export const LoginPage: React.FC = () => {
                   name="password"
                   type="password"
                   autoComplete="current-password"
-                  required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (fieldErrors.password) {
+                      setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                    }
+                  }}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors"
+                  className={getInputClassName(fieldErrors.password, { hasIcon: true, extraClasses: 'text-sm py-2' })}
                 />
               </div>
-            </div>
+            </FormField>
 
             <button
               type="submit"
