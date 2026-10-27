@@ -12,18 +12,19 @@ import { validateBody, validateParams, objectIdSchema } from '../middleware/vali
 const router = Router();
 
 const createUserSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').trim(),
-  email: z.string().email('Invalid email address').trim().toLowerCase(),
+  name: z.string().trim().min(1, 'Name must be at least 1 character'),
+  email: z.string().trim().toLowerCase().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['admin', 'staff']),
+  isActive: z.boolean().optional(),
 });
 
 const updateUserSchema = z.object({
-  name: z.string().min(2).trim().optional(),
-  email: z.string().email().trim().toLowerCase().optional(),
+  name: z.string().trim().min(1, 'Name must be at least 1 character').optional(),
+  email: z.string().trim().toLowerCase().email('Invalid email address').optional(),
   role: z.enum(['admin', 'staff']).optional(),
   isActive: z.boolean().optional(),
-  password: z.string().min(6).optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
 });
 
 const paramIdSchema = z.object({
@@ -56,7 +57,7 @@ router.post(
   validateBody(createUserSchema),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, isActive } = req.body;
 
       const existing = await User.findOne({ email });
       if (existing) {
@@ -70,14 +71,18 @@ router.post(
         email,
         passwordHash,
         role,
-        isActive: true,
+        isActive: typeof isActive === 'boolean' ? isActive : true,
       });
 
       res.status(201).json({
         message: 'User created successfully',
         user: newUser,
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        res.status(409).json({ error: 'A user with this email already exists.' });
+        return;
+      }
       res.status(500).json({ error: 'Failed to create user' });
     }
   }
@@ -131,7 +136,11 @@ router.patch(
 
       await user.save();
       res.json({ message: 'User updated successfully', user });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        res.status(409).json({ error: 'Another user with this email already exists.' });
+        return;
+      }
       res.status(500).json({ error: 'Failed to update user' });
     }
   }

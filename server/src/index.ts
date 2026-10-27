@@ -46,7 +46,10 @@ async function startServer() {
   const adminCount = await User.countDocuments({ role: 'admin' });
   if (adminCount === 0) {
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@clientflow.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'AdminPassword123!';
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      throw new Error('FATAL: ADMIN_PASSWORD must be set to auto-seed admin user.');
+    }
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     await User.create({
       name: 'System Admin',
@@ -123,7 +126,7 @@ async function startServer() {
   app.use(
     session({
       name: 'clientflow.sid',
-      secret: process.env.SESSION_SECRET || 'clientflow-default-secret-key-12345',
+      secret: process.env.SESSION_SECRET || (() => { throw new Error('SESSION_SECRET must be set'); })(),
       resave: false,
       saveUninitialized: false,
       store: MongoStore.create({

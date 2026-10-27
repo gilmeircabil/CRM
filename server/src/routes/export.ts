@@ -102,7 +102,7 @@ router.get(
       res.setHeader('Content-Disposition', 'attachment; filename="customers.xlsx"');
 
       await workbook.xlsx.write(res);
-      res.end();
+      // Don't call res.end() after write, write handles it
     } catch (error) {
       console.error('Customer export error:', error);
       res.status(500).json({ error: 'Failed to export customers' });
@@ -195,7 +195,6 @@ router.get(
       res.setHeader('Content-Disposition', 'attachment; filename="deals.xlsx"');
 
       await workbook.xlsx.write(res);
-      res.end();
     } catch (error) {
       console.error('Deals export error:', error);
       res.status(500).json({ error: 'Failed to export deals' });

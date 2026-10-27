@@ -12,7 +12,7 @@ function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
   if (bufA.length !== bufB.length) {
-    crypto.timingSafeEqual(bufA, bufA);
+    // Use same length to avoid timingSafeEqual throwing; return false
     return false;
   }
   return crypto.timingSafeEqual(bufA, bufB);

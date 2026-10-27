@@ -49,14 +49,20 @@ export const TeamPage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
 
   const handleMutationError = (err: any) => {
-    setFormError(err.message || 'An error occurred');
+    const rawMsg = err.message || 'An error occurred';
+    setFormError(rawMsg);
+    const errMap: typeof fieldErrors = {};
     if (err.details && Array.isArray(err.details)) {
-      const errMap: typeof fieldErrors = {};
       err.details.forEach((d: { field: string; message: string }) => {
         (errMap as any)[d.field] = d.message;
       });
-      setFieldErrors(errMap);
     }
+    if (rawMsg.toLowerCase().includes('already exists') || rawMsg.toLowerCase().includes('email')) {
+      if (!errMap.email && (rawMsg.toLowerCase().includes('already exists') || rawMsg.toLowerCase().includes('email already exists'))) {
+        errMap.email = 'A user with this email already exists';
+      }
+    }
+    setFieldErrors(errMap);
   };
 
   // Fetch all users (Admin endpoint)
@@ -296,10 +302,29 @@ export const TeamPage: React.FC = () => {
           onSubmit={(e) => {
             e.preventDefault();
             const errors: typeof fieldErrors = {};
-            if (!formData.name.trim()) errors.name = 'Full name is required';
-            if (!formData.email.trim()) errors.email = 'Email address is required';
-            if (isCreateModalOpen && !formData.password.trim()) errors.password = 'Password is required';
-            else if (formData.password.trim() && formData.password.trim().length < 6) errors.password = 'Password must be at least 6 characters';
+            const trimmedName = formData.name.trim();
+            const trimmedEmail = formData.email.trim();
+            const passwordVal = formData.password;
+
+            if (!trimmedName) {
+              errors.name = 'Full name is required';
+            }
+
+            if (!trimmedEmail) {
+              errors.email = 'Email address is required';
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+              errors.email = 'Please enter a valid email address';
+            }
+
+            if (isCreateModalOpen) {
+              if (!passwordVal) {
+                errors.password = 'Password is required';
+              } else if (passwordVal.length < 6) {
+                errors.password = 'Password must be at least 6 characters';
+              }
+            } else if (passwordVal && passwordVal.length < 6) {
+              errors.password = 'Password must be at least 6 characters';
+            }
 
             if (Object.keys(errors).length > 0) {
               setFieldErrors(errors);
@@ -309,16 +334,22 @@ export const TeamPage: React.FC = () => {
             setFormError(null);
 
             if (isCreateModalOpen) {
-              createMutation.mutate(formData);
+              createMutation.mutate({
+                name: trimmedName,
+                email: trimmedEmail.toLowerCase(),
+                password: passwordVal,
+                role: formData.role,
+                isActive: formData.isActive,
+              });
             } else if (selectedUser) {
               const updates: any = {
-                name: formData.name,
-                email: formData.email,
+                name: trimmedName,
+                email: trimmedEmail.toLowerCase(),
                 role: formData.role,
                 isActive: formData.isActive,
               };
-              if (formData.password.trim()) {
-                updates.password = formData.password.trim();
+              if (passwordVal) {
+                updates.password = passwordVal;
               }
               editMutation.mutate({ id: selectedUser._id || selectedUser.id, updates });
             }
@@ -326,26 +357,34 @@ export const TeamPage: React.FC = () => {
           noValidate
           className="space-y-4"
         >
-          <FormField label="Full Name" error={fieldErrors.name} required>
+          <FormField label="Full Name" htmlFor="team-member-name" error={fieldErrors.name} required>
             <input
+              id="team-member-name"
+              name="name"
               type="text"
+              autoComplete="name"
               value={formData.name}
               onChange={(e) => {
                 setFormData({ ...formData, name: e.target.value });
-                if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
+                if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                if (formError) setFormError(null);
               }}
               className={getInputClassName(fieldErrors.name)}
               placeholder="e.g. Alex Morgan"
             />
           </FormField>
 
-          <FormField label="Email Address" error={fieldErrors.email} required>
+          <FormField label="Email Address" htmlFor="team-member-email" error={fieldErrors.email} required>
             <input
+              id="team-member-email"
+              name="email"
               type="email"
+              autoComplete="email"
               value={formData.email}
               onChange={(e) => {
                 setFormData({ ...formData, email: e.target.value });
-                if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: undefined });
+                if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                if (formError) setFormError(null);
               }}
               className={getInputClassName(fieldErrors.email)}
               placeholder="alex@clientflow.com"
@@ -354,16 +393,21 @@ export const TeamPage: React.FC = () => {
 
           <FormField
             label={isCreateModalOpen ? 'Password' : 'Change Password (leave blank to keep current)'}
+            htmlFor="team-member-password"
             error={fieldErrors.password}
             required={isCreateModalOpen}
           >
             <input
+              id="team-member-password"
+              name="password"
               type="password"
               minLength={6}
+              autoComplete={isCreateModalOpen ? 'new-password' : 'current-password'}
               value={formData.password}
               onChange={(e) => {
                 setFormData({ ...formData, password: e.target.value });
-                if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: undefined });
+                if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                if (formError) setFormError(null);
               }}
               className={getInputClassName(fieldErrors.password)}
               placeholder="••••••••"

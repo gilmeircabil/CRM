@@ -4,7 +4,7 @@ import { Request, Response, NextFunction } from 'express';
  * Escapes regex special characters to prevent ReDoS and regex injection.
  */
 export function escapeRegex(text: string): string {
-  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  return text.replace(/[-[\]{}()*+?.,\\^$|#]/g, '\\$&');
 }
 
 /**

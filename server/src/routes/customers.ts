@@ -68,7 +68,13 @@ router.get(
 
       // Search across name, email, company
       if (search && search.trim()) {
-        const safeRegex = new RegExp(escapeRegex(search.trim()), 'i');
+        const escaped = escapeRegex(search.trim());
+        // Limit search length and prevent catastrophic backtracking
+        if (escaped.length > 100) {
+          res.status(400).json({ error: 'Search query too long' });
+          return;
+        }
+        const safeRegex = new RegExp(escaped, 'i');
         query.$or = [{ name: safeRegex }, { email: safeRegex }, { company: safeRegex }];
       }
 
